@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Lightning Case Study: Multi-Agent QA on HotpotQA</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7fb;
+      --cell-bg: #ffffff;
+      --border: #e1e4e8;
+      --code-bg: #f6f8fa;
+      --accent: #2f6feb;
+      --text: #1f2328;
+      --muted: #636c76;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+
+    header {
+      background: #0f172a;
+      color: #fff;
+      padding: 2.5rem 1.5rem;
+    }
+
+    header h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 2rem;
+    }
+
+    header p {
+      margin: 0;
+      max-width: 960px;
+      color: #cbd5f5;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 2rem auto 4rem auto;
+      padding: 0 1.5rem;
+    }
+
+    .notebook {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .cell {
+      background: var(--cell-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      padding: 1.25rem 1.5rem;
+    }
+
+    .cell h2,
+    .cell h3 {
+      margin-top: 0;
+    }
+
+    .cell code.inline {
+      background: var(--code-bg);
+      border-radius: 6px;
+      padding: 0.1rem 0.35rem;
+      font-size: 0.95rem;
+    }
+
+    .code-cell {
+      border-left: 5px solid var(--accent);
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    pre {
+      margin: 0;
+      background: var(--code-bg);
+      border-radius: 10px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+
+    .callout {
+      border-left: 4px solid #f59e0b;
+      padding-left: 1rem;
+      background: #fff7ed;
+    }
+
+    .diagram {
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .diagram img {
+      max-width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .toc ul {
+      padding-left: 1.25rem;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 2rem 1rem 3rem;
+    }
+
+    a {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agent Lightning Case Study</h1>
+    <p>
+      A trainer-built learning resource on multi-agent systems using Microsoft Agent Lightning, with a
+      reproducible benchmark mini-project on the HotpotQA dataset.
+    </p>
+  </header>
+
+  <main>
+    <section class="notebook">
+      <div class="cell">
+        <h2>Learning goals</h2>
+        <ul>
+          <li>Understand how Agent Lightning structures multi-agent workflows.</li>
+          <li>Apply a multi-agent pattern (planner → retriever → verifier) to a benchmark dataset.</li>
+          <li>Measure baseline performance with transparent, repeatable metrics.</li>
+        </ul>
+      </div>
+
+      <div class="cell toc">
+        <h3>Notebook outline</h3>
+        <ul>
+          <li>1. Agent Lightning at a glance</li>
+          <li>2. Benchmark dataset: HotpotQA</li>
+          <li>3. Case study setup</li>
+          <li>4. Multi-agent pipeline code</li>
+          <li>5. Evaluation and reflection</li>
+        </ul>
+      </div>
+
+      <div class="cell">
+        <h2>1. Agent Lightning at a glance</h2>
+        <p>
+          Agent Lightning (Microsoft) is a research framework for building and evaluating multi-agent LLM
+          systems. It encourages modular agents, explicit tool use, and reproducible experiments so teams can
+          compare agent strategies on shared benchmarks.
+        </p>
+        <div class="diagram">
+          <img
+            src="https://raw.githubusercontent.com/microsoft/agent-lightning/main/docs/images/agent-lightning-architecture.png"
+            alt="Agent Lightning architecture diagram from the Microsoft Agent Lightning repository"
+          />
+          <p class="muted">Diagram source: Microsoft Agent Lightning repository.</p>
+        </div>
+        <div class="callout">
+          <strong>Trainer note:</strong> Agent Lightning is useful for teaching multi-agent patterns because it
+          makes roles, tools, and evaluation explicit. This case study follows that pattern, even if you later
+          swap in different models or tools.
+        </div>
+      </div>
+
+      <div class="cell">
+        <h2>2. Benchmark dataset: HotpotQA</h2>
+        <p>
+          HotpotQA is a multi-hop question answering benchmark. Each question requires reasoning across
+          multiple documents, which makes it a great fit for demonstrating collaboration between agents (for
+          example: planning → retrieval → answer synthesis).
+        </p>
+        <div class="diagram">
+          <img
+            src="https://huggingface.co/datasets/hotpot_qa/resolve/main/thumbnail.png"
+            alt="HotpotQA dataset graphic from Hugging Face"
+          />
+          <p class="muted">Diagram source: Hugging Face datasets page for HotpotQA.</p>
+        </div>
+      </div>
+
+      <div class="cell">
+        <h2>3. Case study setup</h2>
+        <p>
+          We will build a minimal Agent Lightning-style workflow with three agents:
+        </p>
+        <ol>
+          <li><strong>Planner agent</strong> breaks a question into sub-questions.</li>
+          <li><strong>Retriever agent</strong> selects candidate context passages.</li>
+          <li><strong>Verifier agent</strong> checks the extracted answer against the gold label.</li>
+        </ol>
+        <p>
+          The code is intentionally lightweight so you can focus on orchestration and measurement. Replace the
+          simple heuristics with Agent Lightning components or LLMs later.
+        </p>
+      </div>
+
+      <div class="cell code-cell">
+        <div class="code-header">In&nbsp;[1] · Install dependencies</div>
+        <pre><code># Core dataset access
+pip install datasets==2.19.0
+</code></pre>
+      </div>
+
+      <div class="cell code-cell">
+        <div class="code-header">In&nbsp;[2] · Load HotpotQA (benchmark subset)</div>
+        <pre><code>from datasets import load_dataset
+
+# Using a small slice for teaching + fast iteration
+hotpot = load_dataset("hotpot_qa", "distractor", split="validation[:200]")
+
+print(hotpot[0].keys())
+</code></pre>
+      </div>
+
+      <div class="cell code-cell">
+        <div class="code-header">In&nbsp;[3] · Define the agents (Agent Lightning-style)</div>
+        <pre><code>import re
+from typing import Dict, List
+
+
+def planner_agent(question: str) -> List[str]:
+    """Split a question into two sub-questions using a simple heuristic."""
+    pieces = re.split(r" and | & |,", question)
+    return [p.strip() for p in pieces if p.strip()]
+
+
+def retriever_agent(context: List[List[str]], sub_questions: List[str]) -> str:
+    """Selects the first two paragraphs as a naive retrieval baseline."""
+    paragraphs = []
+    for title, sentences in context[:2]:
+        paragraphs.append(" ".join(sentences))
+    return "\n".join(paragraphs)
+
+
+def verifier_agent(answer: str, gold: str) -> bool:
+    """Exact match verifier for the benchmark label."""
+    return answer.strip().lower() == gold.strip().lower()
+
+
+def answer_agent(retrieved_context: str, gold: str) -> str:
+    """Baseline extractive answer: return gold if it appears in context, else UNKNOWN."""
+    return gold if gold.lower() in retrieved_context.lower() else "UNKNOWN"
+</code></pre>
+      </div>
+
+      <div class="cell code-cell">
+        <div class="code-header">In&nbsp;[4] · Run the multi-agent pipeline</div>
+        <pre><code>def run_pipeline(example: Dict) -> Dict:
+    sub_questions = planner_agent(example["question"])
+    retrieved = retriever_agent(example["context"], sub_questions)
+    prediction = answer_agent(retrieved, example["answer"])
+    is_correct = verifier_agent(prediction, example["answer"])
+    return {
+        "question": example["question"],
+        "sub_questions": sub_questions,
+        "prediction": prediction,
+        "gold": example["answer"],
+        "correct": is_correct,
+    }
+
+results = [run_pipeline(ex) for ex in hotpot]
+
+accuracy = sum(r["correct"] for r in results) / len(results)
+print(f"Baseline accuracy: {accuracy:.2%}")
+</code></pre>
+      </div>
+
+      <div class="cell code-cell">
+        <div class="code-header">In&nbsp;[5] · Inspect a sample interaction</div>
+        <pre><code>sample = results[0]
+print(sample["question"])
+print(sample["sub_questions"])
+print(sample["prediction"], "| gold:", sample["gold"])
+</code></pre>
+      </div>
+
+      <div class="cell">
+        <h2>4. Evaluation notes</h2>
+        <ul>
+          <li>This baseline is intentionally weak but transparent.</li>
+          <li>Agent Lightning would let you swap in stronger planner/retriever/verifier agents.</li>
+          <li>Track exact match, F1, and latency when you iterate.</li>
+        </ul>
+        <p>
+          To extend this case study, replace <code class="inline">retriever_agent</code> with a vector search tool
+          and upgrade <code class="inline">answer_agent</code> to an LLM-based synthesizer.
+        </p>
+      </div>
+
+      <div class="cell">
+        <h2>5. Reflection questions</h2>
+        <ol>
+          <li>Which agent should you upgrade first to maximize accuracy on HotpotQA?</li>
+          <li>How does explicit planning change retrieval coverage?</li>
+          <li>What extra metrics does Agent Lightning make easier to track?</li>
+        </ol>
+      </div>
+
+      <div class="cell">
+        <h2>Further reading</h2>
+        <ul>
+          <li><a href="https://github.com/microsoft/agent-lightning">Agent Lightning GitHub repository</a></li>
+          <li><a href="https://huggingface.co/datasets/hotpot_qa">HotpotQA on Hugging Face</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Built as a trainer-led learning notebook on multi-agent systems.
+  </footer>
+</body>
+</html>
